@@ -118,11 +118,18 @@ class ItemEngineeringConnector:
         p_obj = p_p_obj['objects']
         pidx = 0
         temp_dir = tempfile.TemporaryDirectory()
-        for part_id in p_obj.keys():
-            
+        for part_id in p_obj.keys():            
             part_obj = p_obj[part_id]
             part_group_id = part_obj['g_id']
-            part_product_name = part_obj['name']
+            if part_group_id is None:
+                print("empty partgroup id, set to group") 
+                part_group_id = "_"
+            else:
+                part_group_id = part_group_id.replace('-','_')
+            if "name" in part_obj:
+                part_product_name = part_obj['name'] 
+            else:
+                part_product_name = "unknown"
             part_article_number = part_obj.get('art', "")
             part_roller_conveyor = part_obj.get('roller_conveyor')
             part_length = part_obj.get('length')
@@ -231,7 +238,7 @@ class ItemEngineeringConnector:
         return stage_path
 
     def import_project(self, project_id):
-        print("\n\n IMPORT =================")
+        print(f"\n\n IMPORT {project_id}=================")
         
         self.refresh_parts()
 
