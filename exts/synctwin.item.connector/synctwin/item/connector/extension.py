@@ -1,5 +1,5 @@
 import omni.ext
-from omni.services.transport.client.https_async import consumer
+#from omni.services.transport.client.https_async import consumer
 import omni.ui as ui
 from pathlib import Path
 import carb.settings
@@ -7,8 +7,8 @@ import os
 import asyncio
 import webbrowser
 from enum import IntEnum
-import omni.services.client as _client
-import omni.services.transport.client.http_async
+#import omni.services.client as _client
+#import omni.services.transport.client.http_async 
 
 from pxr import Usd, Sdf, Gf, UsdGeom
 from synctwin.item.connector.item_engineering_connector import ItemEngineeringConnector
@@ -26,8 +26,7 @@ class ItemConnectorExtension(omni.ext.IExt):
     # ext_id is current extension id. It can be used with extension manager to query additional information, like where
     # this extension is located on filesystem.
 
-    def project_url(self, project_id): 
-        return f"{self._itemtool_url}/{project_id}"
+    
     
     def on_startup(self, ext_id):
         
@@ -36,12 +35,20 @@ class ItemConnectorExtension(omni.ext.IExt):
         self._events = self._usd_context.get_stage_event_stream()
         self._stage_event_sub = self._events.create_subscription_to_pop(
             self._on_stage_event, name="on stage event synctwin item connector"
-        )         
-        self._item = ItemEngineeringConnector()     
+        )   
+        self._settings = carb.settings.get_settings()      
+        self._item = ItemEngineeringConnector(
+            self._settings.get("default_projects_path"),
+            self._settings.get("default_parts_path")            
+             )     
         self._settings = carb.settings.get_settings()
-        self._projects_path = self._settings.get("projects_path")                
-        self._parts_path = self._settings.get("parts_path")
-        self._itemtool_url= self._settings.get("itemtool_url")
+
+        
+
+        
+        
+        
+        
         self._project_id = "1d05717eb87cec4287ed241312306c5f4"        
 
         print("[synctwin.item.connector] synctwin item startup")
@@ -55,22 +62,34 @@ class ItemConnectorExtension(omni.ext.IExt):
                     
                     omni.ui.Image(f'{ICON_PATH}/item_logo.png', width=80)
                     with ui.VStack():
-                        ui.Spacer()                        
-                        ui.Button("...", width=25, height=25, tooltip="open engineering tool in browser", clicked_fn=lambda: on_browser_click())
+                        
                         ui.Spacer()
                     ui.Spacer()
+
+                ui.Label("Parts-Path")    
+                parts_path_field = ui.StringField(height=30)
+                parts_path_field.model.set_value(self._item._parts_path)
+                ui.Label("Projects-Path")    
+                catalog_path_field = ui.StringField(height=30)                
+                catalog_path_field.model.set_value(self._item._projects_path)
                 ui.Label("Project-ID")
-                project_field = ui.StringField(height=30)
-                project_field.model.set_value(self._project_id)
-                project_field.model.add_end_edit_fn(lambda new_value: on_project_edit(new_value))
+
+                with ui.HStack():
+                    project_field = ui.StringField(height=30)
+                    project_field.model.set_value(self._project_id)
+                    project_field.model.add_end_edit_fn(lambda new_value: on_project_edit(new_value))
+                
+                    ui.Button("...", width=25, height=25, tooltip="open engineering tool in browser", clicked_fn=lambda: on_browser_click())    
+                
                 ui.Button("update", height=40, clicked_fn=lambda: on_update_click())
                 def on_project_edit(new_value):
                     print("new value:", new_value.as_string)
                     self._project_id = new_value.as_string
                 def on_update_click():
                     self._item.import_project(self._project_id)
+                    
                 def on_browser_click():
-                    self.open_browser(self.project_url(self._project_id))                    
+                    self.open_browser(self._item.project_url(self._project_id))                    
                 ui.Spacer()
         
     
@@ -97,3 +116,14 @@ class ItemConnectorExtension(omni.ext.IExt):
 
     def open_browser(self, url):        
         webbrowser.open(url)
+
+    @staticmethod
+    def _get_content_window():
+        try:
+            import omni.kit.window.content_browser as content
+
+            return content.get_content_window()
+        except Exception as e:
+            pass
+
+        return None

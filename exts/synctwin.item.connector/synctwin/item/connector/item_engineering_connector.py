@@ -1,4 +1,4 @@
-from pxr import Usd, Sdf, UsdGeom, Gf
+from pxr import Usd, Sdf, UsdGeom, Gf, Tf
 from enum import IntEnum
 import omni.services.client as OmniServicesClient
 import omni.kit
@@ -15,19 +15,26 @@ class LevelOfDetail(IntEnum):
     MEDIUM = 1,
     HIGH = 2 
 
-class ItemEngineeringConnector:
-    _item_host = "https://item.engineering"
-    _item_itemtool_url = "DEde/tools/engineeringtool"    
-    _item_geometry_info_endpoint = "dqart/0:DEde/project_utilities/get_geometry_info"
-    _item_object_pool_data_endpoint = "objectPoolData"
+class ItemEndpointInfo:
+    _host = "https://item.engineering"
+    _itemtool_url = "DEde/tools/engineeringtool"    
+    _geometry_info_endpoint = "dqart/0:DEde/project_utilities/get_geometry_info"
+    _object_pool_data_endpoint = "objectPoolData"
 
+class ItemEngineeringConnector:
+    
     _projects_path = "c:/temp/item_engineering_tool"
     _parts_path = "c:/temp/item_engineering_tool/parts"
-    #_projects_path = "omniverse://ovnuc/Projects/BMW_MIRROR/ConnectedSystems/item_engineering_tool"
-    #_parts_path = "omniverse://ovnuc/Projects/BMW_MIRROR/ConnectedSystems/item_engineering_tool/parts"
-    
-    def __init__(self):
-        self._omni_client = OmniServicesClient.AsyncClient(self._item_host) 
+    _endpoint_info = ItemEndpointInfo()
+
+    def __init__(self, projects_path, parts_path, endpoint_info= ItemEndpointInfo()):
+        self._projects_path = projects_path
+        self._parts_path = parts_path
+        self._endpoint_info = endpoint_info
+        self._omni_client = OmniServicesClient.AsyncClient(endpoint_info._host) 
+
+    def project_url(self, project_id): 
+        return f"{self._endpoint_info._host}/{self._endpoint_info._itemtool_url}/{project_id}"
 
     def _open_or_create_stage(self, path, clear_exist=True):
         layer = Sdf.Layer.FindOrOpen(path)
@@ -98,13 +105,13 @@ class ItemEngineeringConnector:
         rel_parts_path = "../parts"  
         lod_stage = self._open_or_create_stage(lod_stage_path)
         lod_world = lod_stage.DefinePrim("/World", "Xform")                
-        UsdGeom.SetStageUpAxis(lod_stage, UsdGeom.Tokens.y)                
+        UsdGeom.SetStageUpAxis(lod_stage, UsdGeom.Tokens.z)                
         lod_stage.SetDefaultPrim(lod_world)
         #-----------------------------------------
         with_product_info = 1        
         with_conveyor_info = 1
         with_material_info = 1
-        url = f'{self._item_geometry_info_endpoint}/{project_id}/{lod}/{with_product_info}/{with_conveyor_info}/{with_material_info}'
+        url = f'{self._endpoint_info._geometry_info_endpoint}/{project_id}/{lod}/{with_product_info}/{with_conveyor_info}/{with_material_info}'
         print("REQUEST->" + url)
         doc = await self._omni_client.get(url)
 
@@ -114,6 +121,7 @@ class ItemEngineeringConnector:
         blobfile = open("c:\\temp\\out.jsn", "w") 
         blobfile.write(json.dumps(doc))
         blobfile.close()
+        print("doc:"+ doc)
         p_p_obj = doc['p']
         p_obj = p_p_obj['objects']
         pidx = 0
@@ -202,16 +210,19 @@ class ItemEngineeringConnector:
         #print(lod_stage.GetRootLayer().ExportToString()) 
         return f"{project_id}/lod{lod}.usd"
 
-    async def _create_main_stage(self, project_id):
+    async def _create_main_stage(self, project_id_org):
+        project_id = Tf.MakeValidIdentifier(project_id_org)
         stage_path = f"{self._projects_path}/{project_id}.usd"
         stage = self._open_or_create_stage(stage_path)
-        UsdGeom.SetStageUpAxis(stage, UsdGeom.Tokens.y) 
+        UsdGeom.SetStageUpAxis(stage, UsdGeom.Tokens.z) 
         if stage is None:
             print("error creating stage")
             return None
         world_prim = stage.DefinePrim("/World", "Xform")         
         stage.SetDefaultPrim(world_prim)
-        item_prim = stage.DefinePrim(f"/World/item_{project_id}", "")        
+        item_prim = stage.DefinePrim(f"/World/item_{project_id}", "Xform")       
+        UsdGeom.Xformable(item_prim).ClearXformOpOrder () 
+        UsdGeom.Xformable(item_prim).AddRotateXOp().Set(90)
         vset = item_prim.GetVariantSets().AddVariantSet('LOD')
         # Create variant options.
         vset.AddVariant('Low')        
@@ -242,16 +253,9 @@ class ItemEngineeringConnector:
         
         self.refresh_parts()
 
-        #loop = asyncio.get_event_loop()
-        #try:
-        #    result = loop.run_until_complete(asyncio.ensure_future(self._create_main_stage(project_id)))
-        #    print(f"GOTI IT {result} ") 
-        #finally:
-        #    loop.close() 
         loop = asyncio.get_event_loop()
         task = loop.create_task(self._create_main_stage(project_id)) # just some task
         r = loop.run_until_complete(task) # wait for it (outside of a coroutine)
-        #r = asyncio.ensure_future(self._create_main_stage(project_id))
 
         print("ENSIRED")
         print(r)

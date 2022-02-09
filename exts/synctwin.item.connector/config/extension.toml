@@ -30,7 +30,8 @@ icon = "data/item_logo.png"
 [dependencies]
 "omni.kit.uiapp" = {}
 "omni.services.client" = {}
-"omni.services.transport.client.https_async" = {}
+#"omni.services.transport.client.https_async" = {}
+"omni.kit.window.content_browser" = { optional = true }
 
 # Main python module this extension provides, it will be publicly available as "import omni.hello.world".
 [[python.module]]
@@ -38,8 +39,6 @@ name = "synctwin.item.connector"
 
 
 [settings]
-projects_path = "omniverse://ovnuc/Projects/BMW_MIRROR/ConnectedSystems/item_engineering_tool"
-#omniverse://10.249.231.25/ConnectedSystems/ipolog/_item_engineering_tool
-parts_path = "omniverse://ovnuc/Projects/BMW_MIRROR/ConnectedSystems/item_engineering_tool/parts"
-#omniverse://10.249.231.25/ConnectedSystems/ipolog/_item_engineering_tool/parts
+default_projects_path = "omniverse://localhost/Projects/BMW_MIRROR/Library/TLO/racks/templates/item"
+default_parts_path = "omniverse://localhost/Projects/BMW_MIRROR/Library/TLO/racks/templates/item/parts"
 itemtool_url = "https://item.engineering/DEde/tools/engineeringtool"
