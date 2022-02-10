@@ -30,6 +30,7 @@ icon = "data/item_logo.png"
 [dependencies]
 "omni.kit.uiapp" = {}
 "omni.services.client" = {}
+"omni.kit.asset_converter" = {}
 #"omni.services.transport.client.https_async" = {}
 "omni.kit.window.content_browser" = { optional = true }
 

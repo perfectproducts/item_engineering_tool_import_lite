@@ -10,6 +10,7 @@ import asyncio
 import json 
 import webbrowser
 
+
 class LevelOfDetail(IntEnum):
     LOW = 0,
     MEDIUM = 1,
@@ -17,6 +18,7 @@ class LevelOfDetail(IntEnum):
 
 class ItemEndpointInfo:
     _host = "https://item.engineering"
+    _blob_host = "https://cdn.item24.com"
     _itemtool_url = "DEde/tools/engineeringtool"    
     _geometry_info_endpoint = "dqart/0:DEde/project_utilities/get_geometry_info"
     _object_pool_data_endpoint = "objectPoolData"
@@ -32,6 +34,7 @@ class ItemEngineeringConnector:
         self._parts_path = parts_path
         self._endpoint_info = endpoint_info
         self._omni_client = OmniServicesClient.AsyncClient(endpoint_info._host) 
+        self._blob_client = OmniServicesClient.AsyncClient(endpoint_info._blob_host) 
 
     def project_url(self, project_id): 
         return f"{self._endpoint_info._host}/{self._endpoint_info._itemtool_url}/{project_id}"
@@ -65,9 +68,12 @@ class ItemEngineeringConnector:
         self._waiting_popup_convert.show()
 
     async def download_blob(self, temp_dir, geo_model, usd_filename):
-        blob_url = f'/objectPoolData/{geo_model}'
+        if not geo_model.startswith(self._endpoint_info._blob_host):
+            print(f"## no blob url {geo_model}" )
+            return ""
+        blob_url = f'{geo_model[len(self._endpoint_info._blob_host)+1:]}'
         print(f"    download {blob_url}")                    
-        blob = await self._omni_client.get(blob_url)
+        blob = await self._blob_client.get(blob_url)
                         
         temp_blob_path =f"{temp_dir.name}/blob.obj" 
         blobfile = open(temp_blob_path, "wb") 
@@ -118,12 +124,11 @@ class ItemEngineeringConnector:
         #webbrowser.open(f"{self.item_host}/{url}")
 
         #print(json.dumps(doc)) 
-        blobfile = open("c:\\temp\\out.jsn", "w") 
-        blobfile.write(json.dumps(doc))
-        blobfile.close()
-        print("doc:"+ doc)
-        p_p_obj = doc['p']
-        p_obj = p_p_obj['objects']
+        #blobfile = open(f"c:\\temp\\out_{project_id}_{lod}.jsn", "w") 
+        #blobfile.write(json.dumps(doc))
+        #blobfile.close()
+        p_p_obj = doc.get('p', {})
+        p_obj = p_p_obj.get('objects', {})
         pidx = 0
         temp_dir = tempfile.TemporaryDirectory()
         for part_id in p_obj.keys():            
@@ -158,7 +163,7 @@ class ItemEngineeringConnector:
                 self.prim = None
                 prim_path = f"/World/g_{part_group_id}/a_{part_article_number}_{pidx}/m_{idx}"
                 if geo_model.endswith(".obj"):
-                    print("   obj:")
+                    print("==>   obj: {geo_model}" )
                     usd_filename = f"g_{geo_model.replace('/','_')}_.usd"
                     if usd_filename in self._ov_parts:
                         print("     using library part")
@@ -168,7 +173,7 @@ class ItemEngineeringConnector:
                         output_path = await self.download_blob(temp_dir, geo_model, usd_filename)
                     print("     d1")
                     model = lod_stage.DefinePrim(prim_path, "")
-                    model.SetInstanceable(False)
+                    model.SetInstanceable(False) 
                     print("     d2")
                     model_part = lod_stage.DefinePrim(prim_path+"/part", "")
                     print(f"     d3 {usd_filename}")
@@ -210,9 +215,9 @@ class ItemEngineeringConnector:
         #print(lod_stage.GetRootLayer().ExportToString()) 
         return f"{project_id}/lod{lod}.usd"
 
-    async def _create_main_stage(self, project_id_org):
-        project_id = Tf.MakeValidIdentifier(project_id_org)
-        stage_path = f"{self._projects_path}/{project_id}.usd"
+    async def _create_main_stage(self, project_id):
+        
+        stage_path = f"{self._projects_path}/{Tf.MakeValidIdentifier(project_id)}.usd"
         stage = self._open_or_create_stage(stage_path)
         UsdGeom.SetStageUpAxis(stage, UsdGeom.Tokens.z) 
         if stage is None:
@@ -249,17 +254,15 @@ class ItemEngineeringConnector:
         return stage_path
 
     def import_project(self, project_id):
-        print(f"\n\n IMPORT {project_id}=================")
+        print(f"== IMPORT {project_id}=================")
         
         self.refresh_parts()
 
         loop = asyncio.get_event_loop()
         task = loop.create_task(self._create_main_stage(project_id)) # just some task
         r = loop.run_until_complete(task) # wait for it (outside of a coroutine)
-
-        print("ENSIRED")
-        print(r)
-        print("=================\n\n")
+        print(f"loading {r}")
+        omni.usd.get_context().open_stage(r)
         return r
         
 
