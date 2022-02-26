@@ -40,6 +40,3 @@ name = "synctwin.item.connector"
 
 
 [settings]
-default_projects_path = "omniverse://localhost/Projects/BMW_MIRROR/Library/TLO/racks/templates/item"
-default_parts_path = "omniverse://localhost/Projects/BMW_MIRROR/Library/TLO/racks/templates/item/parts"
-itemtool_url = "https://item.engineering/DEde/tools/engineeringtool"

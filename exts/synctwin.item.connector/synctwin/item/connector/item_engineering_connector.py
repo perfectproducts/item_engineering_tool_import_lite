@@ -21,23 +21,32 @@ class ItemEndpointInfo:
     _blob_host = "https://cdn.item24.com"
     _itemtool_url = "DEde/tools/engineeringtool"    
     _geometry_info_endpoint = "dqart/0:DEde/project_utilities/get_geometry_info"
-    _object_pool_data_endpoint = "objectPoolData"
+    
 
 class ItemEngineeringConnector:
     
     _projects_path = "c:/temp/item_engineering_tool"
     _parts_path = "c:/temp/item_engineering_tool/parts"
+    _project_url = "https://item.engineering/DEde/tools/engineeringtool/1d05717eb87cec4287ed241312306c5f4"
     _endpoint_info = ItemEndpointInfo()
 
-    def __init__(self, projects_path, parts_path, endpoint_info= ItemEndpointInfo()):
+    def __init__(self, projects_path, parts_path, project_url, endpoint_info= ItemEndpointInfo()):
         self._projects_path = projects_path
         self._parts_path = parts_path
+        self._project_url = project_url
         self._endpoint_info = endpoint_info
         self._omni_client = OmniServicesClient.AsyncClient(endpoint_info._host) 
         self._blob_client = OmniServicesClient.AsyncClient(endpoint_info._blob_host) 
 
-    def project_url(self, project_id): 
-        return f"{self._endpoint_info._host}/{self._endpoint_info._itemtool_url}/{project_id}"
+    def set_catalog_paths(self, projects_path, parts_path ):
+        self._projects_path = projects_path
+        self._parts_path = parts_path
+
+    def parts_catalog(self):
+        return self._parts_path
+
+    def project_url(self): 
+        return self._project_url    
 
     def _open_or_create_stage(self, path, clear_exist=True):
         layer = Sdf.Layer.FindOrOpen(path)
@@ -59,13 +68,13 @@ class ItemEngineeringConnector:
         print (f"parts refreshed, found: {len(self._ov_parts)}")
 
         
-    def _show_waiting_popup_convert(self):
-        if not self._waiting_popup_convert:
-            self._waiting_popup_convert = ProgressPopup("Converting...", status_text="Preparing...")
+    def _show_waiting_popup(self):
+        if not self._waiting_popup:
+            self._waiting_popup  = ProgressPopup("Converting...", status_text="Preparing...")
 
-        self._waiting_popup_convert.status_text = "Preparing..."
-        self._waiting_popup_convert.progress = 0.0
-        self._waiting_popup_convert.show()
+        self._waiting_popup.status_text = "Preparing..."
+        self._waiting_popup.progress = 0.0
+        self._waiting_popup.show()
 
     async def download_blob(self, temp_dir, geo_model, usd_filename):
         if not geo_model.startswith(self._endpoint_info._blob_host):
@@ -118,15 +127,9 @@ class ItemEngineeringConnector:
         with_conveyor_info = 1
         with_material_info = 1
         url = f'{self._endpoint_info._geometry_info_endpoint}/{project_id}/{lod}/{with_product_info}/{with_conveyor_info}/{with_material_info}'
-        print("REQUEST->" + url)
+
         doc = await self._omni_client.get(url)
-
-        #webbrowser.open(f"{self.item_host}/{url}")
-
-        #print(json.dumps(doc)) 
-        #blobfile = open(f"c:\\temp\\out_{project_id}_{lod}.jsn", "w") 
-        #blobfile.write(json.dumps(doc))
-        #blobfile.close()
+        
         p_p_obj = doc.get('p', {})
         p_obj = p_p_obj.get('objects', {})
         pidx = 0
@@ -150,7 +153,7 @@ class ItemEngineeringConnector:
             idx = 0 
             pidx = pidx + 1 
             part_g_obj = part_obj['g']
-            print(f'PART {part_id} {pidx}/{ len(p_obj)} (geos:{len(part_g_obj)}): {part_product_name}')
+            #print(f'PART {part_id} {pidx}/{ len(p_obj)} (geos:{len(part_g_obj)}): {part_product_name}')
             
             for geo_obj in part_g_obj:
                 idx = idx + 1 
@@ -159,34 +162,34 @@ class ItemEngineeringConnector:
                 geo_scale = geo_obj['s']
                 geo_position = geo_obj['p']
                 geo_rotation = geo_obj['r']
-                print(f'  geo {geo_model}')
+                #print(f'  geo {geo_model}')
                 self.prim = None
                 prim_path = f"/World/g_{part_group_id}/a_{part_article_number}_{pidx}/m_{idx}"
                 if geo_model.endswith(".obj"):
-                    print("==>   obj: {geo_model}" )
-                    usd_filename = f"g_{geo_model.replace('/','_')}_.usd"
+                    print(f"==>   obj: {geo_model}" )
+                    usd_filename = f"g_{Tf.MakeValidIdentifier(geo_model)}.usd"
                     if usd_filename in self._ov_parts:
                         print("     using library part")
                         output_path = f"{self._parts_path}/{usd_filename}"
                     else:
-                        print("     downloading")
+                        print(f"     downloading {geo_model}")
                         output_path = await self.download_blob(temp_dir, geo_model, usd_filename)
-                    print("     d1")
+                    
                     model = lod_stage.DefinePrim(prim_path, "")
                     model.SetInstanceable(False) 
-                    print("     d2")
+                    
                     model_part = lod_stage.DefinePrim(prim_path+"/part", "")
-                    print(f"     d3 {usd_filename}")
+                    
                     model_part.GetReferences().AddReference(f"{rel_parts_path}/{usd_filename}")
-                    print("     d4")
+                    
                     
                     UsdGeom.Xformable(model_part).ClearXformOpOrder ()
                     UsdGeom.Xformable(model_part).AddTranslateOp().Set(Gf.Vec3f(geo_position["x"], geo_position["y"], geo_position["z"]))
                     UsdGeom.Xformable(model_part).AddRotateXYZOp().Set(Gf.Vec3f(geo_rotation["x"], geo_rotation["y"], geo_rotation["z"]))    
                     UsdGeom.Xformable(model_part).AddScaleOp().Set(Gf.Vec3f(geo_scale["x"], geo_scale["y"], geo_scale["z"]))    
-                    print("    obj done.")
+                    
                 elif geo_model == "cube":                    
-                    print(prim_path)
+                    #print(prim_path)
                     cube = lod_stage.DefinePrim(prim_path, "Cube")
                     cube.GetAttribute("size").Set(2.0)
                     
@@ -253,16 +256,25 @@ class ItemEngineeringConnector:
         print(f"written.{stage_path}")
         return stage_path
 
-    def import_project(self, project_id):
-        print(f"== IMPORT {project_id}=================")
-        
-        self.refresh_parts()
+    def project_url(self):
+        return self._project_url
 
+    def project_id(self):
+        return self._project_url.split("/")[-1]
+        
+
+    def import_project(self, project_url):
+        self.refresh_parts()
+        self._project_url = project_url
+        print(f"== IMPORT {project_url}=================")
+        print(f"projects: {self._projects_path}")
+        print(f"parts: {self._parts_path}")
+        print(f"project: {self.project_id()}")
+
+        
         loop = asyncio.get_event_loop()
-        task = loop.create_task(self._create_main_stage(project_id)) # just some task
-        r = loop.run_until_complete(task) # wait for it (outside of a coroutine)
-        print(f"loading {r}")
-        omni.usd.get_context().open_stage(r)
+        task = loop.create_task(self._create_main_stage(self.project_id())) # just some task
+        r = loop.run_until_complete(task) # wait for it (outside of a coroutine)        
         return r
         
 

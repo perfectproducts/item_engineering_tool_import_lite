@@ -17,39 +17,40 @@ ICON_PATH = Path(__file__).parent.parent.parent.parent.joinpath("data")
 # Any class derived from `omni.ext.IExt` in top level module (defined in `python.modules` of `extension.toml`) will be
 # instantiated when extension gets enabled and `on_startup(ext_id)` will be called. Later when extension gets disabled
 # on_shutdown() is called.
-class LevelOfDetail(IntEnum):
-    LOW = 0,
-    MEDIUM = 1,
-    HIGH = 2 
 
 class ItemConnectorExtension(omni.ext.IExt):
     # ext_id is current extension id. It can be used with extension manager to query additional information, like where
     # this extension is located on filesystem.
 
-    
+    def settings_value(self, key, default_value="")->str : 
+        result=self._settings.get(key)
+        if result == None:
+            result = default_value
+        return result 
     
     def on_startup(self, ext_id):
         
         self._usd_context = omni.usd.get_context()
-        self._selection = self._usd_context.get_selection()
-        self._events = self._usd_context.get_stage_event_stream()
-        self._stage_event_sub = self._events.create_subscription_to_pop(
-            self._on_stage_event, name="on stage event synctwin item connector"
-        )   
-        self._settings = carb.settings.get_settings()      
-        self._item = ItemEngineeringConnector(
-            self._settings.get("default_projects_path"),
-            self._settings.get("default_parts_path")            
-             )     
-        self._settings = carb.settings.get_settings()
+
+        self._settings = carb.settings.get_settings()    
+
+        default_base_path = "omniverse://b2e75b34-0278-49e2-b28d-08af7323a8bc.cne.ngc.nvidia.com"
+        default_projects_path = "Library/Racks/item"
+        default_parts_path = "Library/Racks/item/parts"
+        default_project_url = "https://item.engineering/DEde/tools/engineeringtool/1d05717eb87cec4287ed241312306c5f4"
+
+        #-- get values 
+        base_path= self.settings_value("base_path", default_base_path)
+        projects_path= self.settings_value("projects_path", default_projects_path)        
+        parts_path= self.settings_value("parts_catalog_url", default_parts_path)
+        project_url=self.settings_value("project_url", default_project_url)
 
         
-
-        
-        
-        
-        
-        self._project_id = "1d05717eb87cec4287ed241312306c5f4"        
+        self._item_connector = ItemEngineeringConnector(
+            projects_path=f"{base_path}/{projects_path}",
+            parts_path=f"{base_path}/{parts_path}",
+            project_url=project_url
+            )     
 
         print("[synctwin.item.connector] synctwin item startup")
 
@@ -61,69 +62,48 @@ class ItemConnectorExtension(omni.ext.IExt):
                 with ui.HStack():                    
                     
                     omni.ui.Image(f'{ICON_PATH}/item_logo.png', width=80)
-                    with ui.VStack():
-                        
-                        ui.Spacer()
-                    ui.Spacer()
+                    
+                ui.Label("Base-Path")    
+                base_path_field = ui.StringField(height=30)
+                base_path_field.model.set_value(base_path)
 
                 ui.Label("Parts-Path")    
                 parts_path_field = ui.StringField(height=30)
-                parts_path_field.model.set_value(self._item._parts_path)
+                parts_path_field.model.set_value(parts_path)
+
                 ui.Label("Projects-Path")    
-                catalog_path_field = ui.StringField(height=30)                
-                catalog_path_field.model.set_value(self._item._projects_path)
-                ui.Label("Project-ID")
+                catalog_path_field = ui.StringField(height=30)
+                catalog_path_field.model.set_value(projects_path)
 
-                with ui.HStack():
-                    project_field = ui.StringField(height=30)
-                    project_field.model.set_value(self._project_id)
-                    project_field.model.add_end_edit_fn(lambda new_value: on_project_edit(new_value))
+                ui.Label("Project Url")    
+                project_url_field = ui.StringField(height=30)
+                project_url_field.model.set_value(project_url)
+                ui.Label("open created")
+                self._open_check = ui.CheckBox()
+                def on_update_clicked():
+                    result = self._item_connector.import_project(project_url_field.model.get_value_as_string())
+                    # store settings
+                    self._settings.set("base_path", base_path_field.model.get_value_as_string())
+                    self._settings.set("projects_path", catalog_path_field.model.get_value_as_string())
+                    self._settings.set("parts_catalog_url", parts_path_field.model.get_value_as_string())
+                    self._settings.set("project_url", project_url_field.model.get_value_as_string())
+                    if self._open_check.model.get_value_as_bool():
+                        omni.usd.get_context().open_stage(result) 
+
+                ui.Button("create usd", height=40, clicked_fn=lambda: on_update_clicked())
+
+                def on_browser_clicked():
+                    self.open_browser(self._item_connector.project_url())                    
+                ui.Button("open browser", height=40, tooltip="open engineering tool in browser", clicked_fn=lambda: on_browser_clicked())    
+
                 
-                    ui.Button("...", width=25, height=25, tooltip="open engineering tool in browser", clicked_fn=lambda: on_browser_click())    
-                
-                ui.Button("update", height=40, clicked_fn=lambda: on_update_click())
-                def on_project_edit(new_value):
-                    print("new value:", new_value.as_string)
-                    self._project_id = new_value.as_string
-                def on_update_click():
-                    self._item.import_project(self._project_id)
-                    
-                def on_browser_click():
-                    self.open_browser(self._item.project_url(self._project_id))                    
-                ui.Spacer()
-        
     
-    def on_shutdown(self):
-        print("[synctwin.item.connector] synctwin item shutdown")
+    def on_shutdown(self):        
+        self._window = None 
+        self._settings = None 
+        self._item_connector = None
 
-    def _on_stage_event(self, event):
-        """Called with subscription to pop"""
-
-        if event.type == int(omni.usd.StageEventType.SELECTION_CHANGED):
-           self._on_selection_changed()
-
-    def _on_selection_changed(self):
-        """Called when the user changes the selection""" 
-        selection = self._selection.get_selected_prim_paths()
-        stage = self._usd_context.get_stage()
-        print("selection", selection )
-        print("stage", stage)
-        if selection and stage:
-            prim = stage.GetPrimAtPath(selection[0])
-            properties = prim.GetPropertyNames()
-            #print(properties)
-            print(prim.GetCustomData())   
 
     def open_browser(self, url):        
         webbrowser.open(url)
 
-    @staticmethod
-    def _get_content_window():
-        try:
-            import omni.kit.window.content_browser as content
-
-            return content.get_content_window()
-        except Exception as e:
-            pass
-
-        return None
