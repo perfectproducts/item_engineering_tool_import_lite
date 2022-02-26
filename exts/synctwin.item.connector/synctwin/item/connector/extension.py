@@ -94,11 +94,13 @@ class ItemConnectorExtension(omni.ext.IExt):
                 def on_goto_content_clicked():
                     if self._content_browser is not None:
                         self._content_browser.navigate_to(self._item_connector.stage_path())
+                        
+                def on_browser_clicked():
+                    self.open_browser(self._item_connector.project_url())                    
 
                 ui.Button("create usd", height=40, clicked_fn=lambda: on_update_clicked())
                 ui.Button("go to content browser", clicked_fn=lambda: on_goto_content_clicked())
-                def on_browser_clicked():
-                    self.open_browser(self._item_connector.project_url())                    
+                
                 ui.Button("open browser", height=40, tooltip="open engineering tool in browser", clicked_fn=lambda: on_browser_clicked())    
 
                 
