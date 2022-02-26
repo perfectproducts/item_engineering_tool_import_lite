@@ -7,8 +7,9 @@ import os
 import asyncio
 import webbrowser
 from enum import IntEnum
-#import omni.services.client as _client
-#import omni.services.transport.client.http_async 
+import omni.kit.window.content_browser as content
+
+
 
 from pxr import Usd, Sdf, Gf, UsdGeom
 from synctwin.item.connector.item_engineering_connector import ItemEngineeringConnector
@@ -33,7 +34,7 @@ class ItemConnectorExtension(omni.ext.IExt):
         self._usd_context = omni.usd.get_context()
 
         self._settings = carb.settings.get_settings()    
-
+        self._content_browser = content.get_content_window()
         default_base_path = "omniverse://b2e75b34-0278-49e2-b28d-08af7323a8bc.cne.ngc.nvidia.com"
         default_projects_path = "Library/Racks/item"
         default_parts_path = "Library/Racks/item/parts"
@@ -90,8 +91,12 @@ class ItemConnectorExtension(omni.ext.IExt):
                     if self._open_check.model.get_value_as_bool():
                         omni.usd.get_context().open_stage(result) 
 
-                ui.Button("create usd", height=40, clicked_fn=lambda: on_update_clicked())
+                def on_goto_content_clicked():
+                    if self._content_browser is not None:
+                        self._content_browser.navigate_to(self._item_connector.stage_path())
 
+                ui.Button("create usd", height=40, clicked_fn=lambda: on_update_clicked())
+                ui.Button("go to content browser", clicked_fn=lambda: on_goto_content_clicked())
                 def on_browser_clicked():
                     self.open_browser(self._item_connector.project_url())                    
                 ui.Button("open browser", height=40, tooltip="open engineering tool in browser", clicked_fn=lambda: on_browser_clicked())    
@@ -102,6 +107,7 @@ class ItemConnectorExtension(omni.ext.IExt):
         self._window = None 
         self._settings = None 
         self._item_connector = None
+        self._content_browser = None
 
 
     def open_browser(self, url):        

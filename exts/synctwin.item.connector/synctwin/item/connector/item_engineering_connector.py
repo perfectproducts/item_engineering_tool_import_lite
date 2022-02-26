@@ -220,8 +220,8 @@ class ItemEngineeringConnector:
 
     async def _create_main_stage(self, project_id):
         
-        stage_path = f"{self._projects_path}/{Tf.MakeValidIdentifier(project_id)}.usd"
-        stage = self._open_or_create_stage(stage_path)
+        
+        stage = self._open_or_create_stage(self.stage_path())
         UsdGeom.SetStageUpAxis(stage, UsdGeom.Tokens.z) 
         if stage is None:
             print("error creating stage")
@@ -253,8 +253,8 @@ class ItemEngineeringConnector:
         
         stage.Save()
         #print(stage.GetRootLayer().ExportToString())
-        print(f"written.{stage_path}")
-        return stage_path
+        print(f"written.{self.stage_path()}")
+        return self.stage_path()
 
     def project_url(self):
         return self._project_url
@@ -262,6 +262,8 @@ class ItemEngineeringConnector:
     def project_id(self):
         return self._project_url.split("/")[-1]
         
+    def stage_path(self):
+        return f"{self._projects_path}/{Tf.MakeValidIdentifier(self.project_id())}.usd"
 
     def import_project(self, project_url):
         self.refresh_parts()
@@ -270,7 +272,7 @@ class ItemEngineeringConnector:
         print(f"projects: {self._projects_path}")
         print(f"parts: {self._parts_path}")
         print(f"project: {self.project_id()}")
-
+        
         
         loop = asyncio.get_event_loop()
         task = loop.create_task(self._create_main_stage(self.project_id())) # just some task
