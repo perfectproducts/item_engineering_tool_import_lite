@@ -30,19 +30,19 @@ class ItemEngineeringConnector:
     _project_url = "https://item.engineering/DEde/tools/engineeringtool/1d05717eb87cec4287ed241312306c5f4"
     _endpoint_info = ItemEndpointInfo()
 
-    def __init__(self, projects_path, parts_path, project_url, endpoint_info= ItemEndpointInfo()):
-        self._projects_path = projects_path
-        self._parts_path = parts_path
+    def __init__(self, base_path, project_url, endpoint_info= ItemEndpointInfo()):
+        self._base_path = base_path
         self._project_url = project_url
         self._endpoint_info = endpoint_info
         self._omni_client = OmniServicesClient.AsyncClient(endpoint_info._host) 
         self._blob_client = OmniServicesClient.AsyncClient(endpoint_info._blob_host) 
 
-    def set_catalog_paths(self, projects_path, parts_path ):
-        self._projects_path = projects_path
-        self._parts_path = parts_path
+    def set_base_path(self, base_path):
+        self._base_path = base_path 
+        self._projects_path = f"{base_path}/projects"
+        self._parts_path = f"{base_path}/parts"
 
-    def parts_catalog(self):
+    def parts_path(self):
         return self._parts_path
 
     def project_url(self): 
@@ -65,16 +65,8 @@ class ItemEngineeringConnector:
         result, entries = OmniClient.list(self._parts_path)
         for entry in entries:
             self._ov_parts.append(entry.relative_path)
-        print (f"parts refreshed, found: {len(self._ov_parts)}")
+        print (f"parts refreshed from {self._parts_path}, found: {len(self._ov_parts)}")
 
-        
-    def _show_waiting_popup(self):
-        if not self._waiting_popup:
-            self._waiting_popup  = ProgressPopup("Converting...", status_text="Preparing...")
-
-        self._waiting_popup.status_text = "Preparing..."
-        self._waiting_popup.progress = 0.0
-        self._waiting_popup.show()
 
     async def download_blob(self, temp_dir, geo_model, usd_filename):
         if not geo_model.startswith(self._endpoint_info._blob_host):
@@ -115,9 +107,10 @@ class ItemEngineeringConnector:
         return output_path
 
     async def _create_lod_stage(self, project_id, lod):
-        print("create lod stage ...")
+        print(f"create lod stage {project_id} lod {lod}...")
+
         lod_stage_path = f"{self._projects_path}/{project_id}/lod{lod}.usd"      
-        rel_parts_path = "../parts"  
+        
         lod_stage = self._open_or_create_stage(lod_stage_path)
         lod_world = lod_stage.DefinePrim("/World", "Xform")                
         UsdGeom.SetStageUpAxis(lod_stage, UsdGeom.Tokens.z)                
@@ -134,6 +127,8 @@ class ItemEngineeringConnector:
         p_obj = p_p_obj.get('objects', {})
         pidx = 0
         temp_dir = tempfile.TemporaryDirectory()
+        known_host = 'https://cdn.item24.com/object-assets/geometries/'
+
         for part_id in p_obj.keys():            
             part_obj = p_obj[part_id]
             part_group_id = part_obj['g_id']
@@ -166,21 +161,27 @@ class ItemEngineeringConnector:
                 self.prim = None
                 prim_path = f"/World/g_{part_group_id}/a_{part_article_number}_{pidx}/m_{idx}"
                 if geo_model.endswith(".obj"):
+                    geo_model_url = geo_model
+                    if geo_model.startswith(known_host):
+                        geo_model = geo_model[len(known_host):]
+
                     print(f"==>   obj: {geo_model}" )
+
                     usd_filename = f"g_{Tf.MakeValidIdentifier(geo_model)}.usd"
                     if usd_filename in self._ov_parts:
-                        print("     using library part")
+                        #print("     using library part")
                         output_path = f"{self._parts_path}/{usd_filename}"
                     else:
                         print(f"     downloading {geo_model}")
-                        output_path = await self.download_blob(temp_dir, geo_model, usd_filename)
+                        output_path = await self.download_blob(temp_dir, geo_model_url, usd_filename)
                     
                     model = lod_stage.DefinePrim(prim_path, "")
                     model.SetInstanceable(False) 
                     
                     model_part = lod_stage.DefinePrim(prim_path+"/part", "")
                     
-                    model_part.GetReferences().AddReference(f"{rel_parts_path}/{usd_filename}")
+                    
+                    model_part.GetReferences().AddReference(output_path)
                     
                     
                     UsdGeom.Xformable(model_part).ClearXformOpOrder ()
