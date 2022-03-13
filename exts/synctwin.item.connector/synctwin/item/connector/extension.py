@@ -35,63 +35,66 @@ class ItemConnectorExtension(omni.ext.IExt):
         icon_path = Path(extension_path).joinpath("data").joinpath("icons")
         return icon_path
 
-    def on_dir_pick(self, dialog, dirname: str):
-        print(f"filepick: dir {dirname} " )
+    def on_base_directory_selected(self, dialog, dirname: str):        
         self._base_path_model.set_value(dirname)        
+        self.update_settings()
         dialog.hide()
 
-    def on_show_dialog(self):
+    def show_base_directory_selection_dialog(self):
         heading = "Select Folder..."
         dialog = FilePickerDialog(
             heading,
             
             apply_button_label="Select Directory",
-            click_apply_handler=lambda filename, dirname: self.on_dir_pick(dialog, dirname),
+            click_apply_handler=lambda filename, dirname: self.on_base_directory_selected(dialog, dirname),
             item_filter_options=None,
         )
         dialog.set_current_directory(self._base_path_model.get_value_as_string())
         dialog.show()
 
-    def on_startup(self, ext_id):
-        
-        self._usd_context = omni.usd.get_context()
+    def update_settings(self):
+        self._settings.set("base_path", self._base_path_model.get_value_as_string())
+        self._settings.set("project_url", self._project_url_model.get_value_as_string())        
 
+    def on_startup(self, ext_id):        
+        # our usd context 
+        self._usd_context = omni.usd.get_context()
+        # store settings
         self._settings = carb.settings.get_settings()    
+        # content browser widget
         self._content_browser = content.get_content_window()
-        #default_base_path = "omniverse://b2e75b34-0278-49e2-b28d-08af7323a8bc.cne.ngc.nvidia.com"
-        default_base_path = Path.home().as_posix()
-        
+
+        # default to home directory 
+        default_base_path = Path.home().as_posix()        
         default_project_url = "https://item.engineering/DEde/tools/engineeringtool/0b1c8132c6edec627bf6aa9b9084831e1"
 
         #-- get values 
         base_path=self.settings_value("base_path", default_base_path)        
         project_url=self.settings_value("project_url", default_project_url)
+        self._base_path_model = ui.SimpleStringModel(base_path)
+        self._project_url_model = ui.SimpleStringModel(project_url)
+        self._open_created_model = ui.SimpleBoolModel(True)
 
-        
         self._item_connector = ItemEngineeringConnector(
             base_path=base_path,
             project_url=project_url
             )     
 
-        print("[synctwin.item.connector] synctwin item startup")
-
         self._window = ui.Window("synctwin item connector", width=300, height=200)
 
         with self._window.frame:
             with ui.VStack():
-                
-                print(self.get_icon_path().joinpath("item_logo.png").as_uri())
                 omni.ui.Image(self.get_icon_path().joinpath("item_logo.png").absolute().as_posix(), width=80, height=30)
 
                 ui.Label("Project Url", height=30)    
-                project_url_field = ui.StringField(height=30)
-                project_url_field.model.set_value(project_url)
+                project_url_field = ui.StringField(
+                    model=self._project_url_model,
+                    height=30
+                    )
 
                 ui.Spacer(height=10)
-                ui.Label("Base-Path",height=30 )    
-                with ui.HStack(height=30):                     
-                    
-                    self._base_path_model = ui.SimpleStringModel(base_path)
+                ui.Label("Base-Path", height=30)
+                with ui.HStack(height=30):                          
                     base_path_field = ui.StringField(                        
                         model=self._base_path_model,
                         height=30
@@ -101,7 +104,7 @@ class ItemConnectorExtension(omni.ext.IExt):
                         width=25,
                         height=30,
                         tooltip="select directory...",
-                        clicked_fn=lambda: self.on_show_dialog()
+                        clicked_fn=lambda: self.show_base_directory_selection_dialog()
                     )
 
                 button_height = 40
@@ -110,25 +113,24 @@ class ItemConnectorExtension(omni.ext.IExt):
                     ui.Spacer(width=5)
                     with ui.VStack(width=10, height=button_height):
                         ui.Spacer()
-                        self._open_check = ui.CheckBox(width=10)
+                        ui.CheckBox(width=10, model=self._open_created_model)
                         ui.Spacer()
                     ui.Button("create usd", height=button_height, clicked_fn=lambda: on_update_clicked())     
                
                 ui.Button("go to content browser", clicked_fn=lambda: on_goto_content_clicked(), height=button_height)
                 
                 ui.Button("open engineering tool project", height=button_height, tooltip="open engineering tool in browser", clicked_fn=lambda: on_browser_clicked())    
-                ui.Spacer()    
+                ui.Spacer()
 
                 def on_update_clicked():
                     base_path = self._base_path_model.get_value_as_string()
-                    
+                    self.update_settings()
                     self._item_connector.set_base_path(base_path)
                     result = self._item_connector.import_project(project_url_field.model.get_value_as_string())
                     # store settings
-                    self._settings.set("base_path", base_path_field.model.get_value_as_string())
-                    self._settings.set("project_url", project_url_field.model.get_value_as_string())
-                    if self._open_check.model.get_value_as_bool():
-                        omni.usd.get_context().open_stage(result) 
+                    
+                    if self._open_created_model.get_value_as_bool():
+                        omni.usd.get_context().open_stage(result)
 
                 def on_goto_content_clicked():
                     if self._content_browser is not None:
@@ -138,11 +140,14 @@ class ItemConnectorExtension(omni.ext.IExt):
                 def on_browser_clicked():
                     self.open_browser(self._item_connector.project_url())                    
 
+    # cleanup on shutdown  
     def on_shutdown(self):        
+        self._settings = None
+        self._window = None
+
         print("shutdown")
         
-
-
+    # opens a system browser with given url 
     def open_browser(self, url):        
         webbrowser.open(url)
 

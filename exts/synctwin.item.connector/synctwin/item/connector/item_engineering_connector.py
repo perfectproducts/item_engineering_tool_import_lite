@@ -38,7 +38,10 @@ class ItemEngineeringConnector:
         self._blob_client = OmniServicesClient.AsyncClient(endpoint_info._blob_host) 
 
     def set_base_path(self, base_path):
+        if base_path.endswith("/"):
+            base_path = base_path[:-1]
         self._base_path = base_path 
+         
         self._projects_path = f"{base_path}/projects"
         self._parts_path = f"{base_path}/parts"
 
@@ -86,7 +89,7 @@ class ItemEngineeringConnector:
 
         converter_manager = omni.kit.asset_converter.get_instance()
         context = omni.kit.asset_converter.AssetConverterContext()
-        context.ignore_materials = True                        
+        context.ignore_materials = False                        
         output_path = f"{self._parts_path}/{usd_filename}"
         
         print("convert...")
@@ -165,14 +168,14 @@ class ItemEngineeringConnector:
                     if geo_model.startswith(known_host):
                         geo_model = geo_model[len(known_host):]
 
-                    print(f"==>   obj: {geo_model}" )
+                    #print(f"==>   obj: {geo_model}" )
 
                     usd_filename = f"g_{Tf.MakeValidIdentifier(geo_model)}.usd"
                     if usd_filename in self._ov_parts:
                         #print("     using library part")
                         output_path = f"{self._parts_path}/{usd_filename}"
                     else:
-                        print(f"     downloading {geo_model}")
+                        #print(f"     downloading {geo_model}")
                         output_path = await self.download_blob(temp_dir, geo_model_url, usd_filename)
                     
                     model = lod_stage.DefinePrim(prim_path, "")
@@ -212,11 +215,9 @@ class ItemEngineeringConnector:
                     UsdGeom.Xformable(cylinder).AddScaleOp().Set(Gf.Vec3f(geo_scale["x"], geo_scale["y"], geo_scale["z"]))    
                 else :
                     print(f"unknown geo type {geo_model}")
-
-            print("done.")
         
         lod_stage.Save()
-        #print(lod_stage.GetRootLayer().ExportToString()) 
+        
         return f"{project_id}/lod{lod}.usd"
 
     async def _create_main_stage(self, project_id):
@@ -231,6 +232,7 @@ class ItemEngineeringConnector:
         stage.SetDefaultPrim(world_prim)
         item_prim = stage.DefinePrim(f"/World/item_{project_id}", "Xform")       
         UsdGeom.Xformable(item_prim).ClearXformOpOrder () 
+        UsdGeom.Xformable(item_prim).AddScaleOp().Set(Gf.Vec3f(0.1,0.1,0.1))
         UsdGeom.Xformable(item_prim).AddRotateXOp().Set(90)
         vset = item_prim.GetVariantSets().AddVariantSet('LOD')
         # Create variant options.
@@ -276,8 +278,8 @@ class ItemEngineeringConnector:
         
         
         loop = asyncio.get_event_loop()
-        task = loop.create_task(self._create_main_stage(self.project_id())) # just some task
-        r = loop.run_until_complete(task) # wait for it (outside of a coroutine)        
+        task = loop.create_task(self._create_main_stage(self.project_id()))
+        r = loop.run_until_complete(task)
         return r
         
 
