@@ -1,9 +1,5 @@
 # item engineering tool connector by synctwin
 
-easily export your construction projects to Omniverse 
-
-Imports highly detailed CAD data from item engineering tool webapp into an USD file
-
 ![connector icons](../data/extension.png)
 
 | Element            | Description |
