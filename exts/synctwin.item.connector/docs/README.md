@@ -1,4 +1,4 @@
-# item engineering tool connector by synctwin
+# item EngineeringTool Importer KIT Extension
 
 ![connector icons](../data/extension.png)
 
