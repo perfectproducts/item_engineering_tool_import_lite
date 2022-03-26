@@ -66,7 +66,7 @@ class ItemConnectorExtension(omni.ext.IExt):
 
         # default to home directory 
         default_base_path = Path.home().as_posix()        
-        default_project_url = "https://item.engineering/DEde/tools/engineeringtool/0b1c8132c6edec627bf6aa9b9084831e1"
+        default_project_url = "https://item.engineering/DEde/tools/engineeringtool/1aa62b1fe013ec5f83f83c1471c5ec124"
 
         #-- get values 
         base_path=self.settings_value("base_path", default_base_path)        

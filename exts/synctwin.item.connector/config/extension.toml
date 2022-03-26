@@ -20,8 +20,9 @@ icon = "data/icons/item_logo.png"
 [dependencies]
 "omni.kit.uiapp" = {}
 "omni.services.client" = {}
+"omni.services.transport.client.http_async" = {}
 "omni.kit.asset_converter" = {}
-"omni.kit.window.content_browser" = { optional = true }
+"omni.kit.window.content_browser" = { }
 
 [[python.module]]
 name = "synctwin.item.connector"
