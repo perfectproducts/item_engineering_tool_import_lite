@@ -168,15 +168,10 @@ class ItemEngineeringConnector:
                     if geo_model.startswith(known_host):
                         geo_model = geo_model[len(known_host):]
 
-                    #print(f"==>   obj: {geo_model}" )
-
                     usd_filename = f"g_{Tf.MakeValidIdentifier(geo_model)}.usd"
-                    if usd_filename in self._ov_parts:
-                        #print("     using library part")
-                        output_path = f"{self._parts_path}/{usd_filename}"
-                    else:
-                        #print(f"     downloading {geo_model}")
-                        output_path = await self.download_blob(temp_dir, geo_model_url, usd_filename)
+                    if usd_filename not in self._ov_parts:
+                        print(f"downloading part {geo_model_url}")
+                        await self.download_blob(temp_dir, geo_model_url, usd_filename)
                     
                     model = lod_stage.DefinePrim(prim_path, "")
                     model.SetInstanceable(False) 
@@ -184,7 +179,7 @@ class ItemEngineeringConnector:
                     model_part = lod_stage.DefinePrim(prim_path+"/part", "")
                     
                     
-                    model_part.GetReferences().AddReference(output_path)
+                    model_part.GetReferences().AddReference(f"../../parts/{usd_filename}")
                     
                     
                     UsdGeom.Xformable(model_part).ClearXformOpOrder ()
